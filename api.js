@@ -29,20 +29,22 @@ export default class Kijiji {
         @param {object} options - The search options
         @param {string} options.categoryName - The category name
         @param {string} options.brand - The brand
-        @param {number} options.locationId - The location id
+        @param {string} options.address - The name of the city
+        @param {number} options.radius - The radius of the search in kms
         @param {number} options.minPrice - The minimum price
         @param {number} options.maxPrice - The maximum price
         @param {string} options.sortByName - possible values: dateDesc, priceAsc, priceDesc
         @param {number} options.categoryId - The category id
 
-        @returns {array} - An array of all listings satifying the search query
+        @returns {object} - The search results
     */
 
-    search = async (searchQuery, {categoryName = "", brand = "", locationId = 1700276, minPrice = "", maxPrice = "", sortByName = "dateDesc", categoryId = 0} = {}) => {
+    search = async (searchQuery, {categoryName = "", brand = "", address = "Mississauga", radius="", minPrice = "", maxPrice = "", sortByName = "dateDesc", categoryId = 0} = {}) => {
         const payload = this.defaultPayload;
         payload.categoryName = categoryName;
         payload.brand = brand;
-        payload.locationId = locationId;
+        payload.address = address;
+        payload.radius = radius;
         payload.minPrice = minPrice;
         payload.maxPrice = maxPrice;
         payload.sortByName = sortByName;
@@ -54,10 +56,6 @@ export default class Kijiji {
             const response = await axios.get('https://www.kijiji.ca/b-search.html?' + toQueryString(payload));
 
             const redirectUrl = response.request.path;
-            console.log(redirectUrl)
-
-            // A code that kijiji generates on the server for a redirect
-            const KijijiUrlCode = redirectUrl.split('/')[3].split('?')[0]
 
             const $ = cheerio.load(response.data);
             const listingsToReturn = [];
@@ -69,19 +67,7 @@ export default class Kijiji {
             // Total number of pages based on the number of results
             const totalPages = Math.ceil(Number(totalResults) / 40);
 
-            $('[data-listing-id]').map((i, el) => {
-                const newListing = {};
-                newListing.title = $(el).find('div.title').text().trim();
-                newListing.price = $(el).find('div.price').text().trim();
-                newListing.url = "https://kijiji.ca" + $(el).find('div.title a').attr('href');
-                // newListing.distance = $(el).find('div.distance').text().trim();
-                newListing.distance = "TBD";
-                newListing.location = $(el).find('div.location span').first().text().trim();
-                newListing.datePosted = $(el).find('div.location span.date-posted').text().trim();
-                newListing.description = $(el).find('div.description').text().trim();
-
-                listingsToReturn.push(newListing);
-            });
+            listingsToReturn.push(...await pullListingsFromPage($));
 
             // Getting results from next pages if there are any
             if (totalPages <= 1) {
@@ -98,22 +84,10 @@ export default class Kijiji {
                 
                 const res = await axios.get(`https://www.kijiji.ca${newPagePath}}`)
 
-                // REFACTOR THIS
 
                 const $ = cheerio.load(res.data);
-                $('[data-listing-id]').map((i, el) => {
-                    const newListing = {};
-                    newListing.title = $(el).find('div.title').text().trim();
-                    newListing.price = $(el).find('div.price').text().trim();
-                    newListing.url = "https://kijiji.ca" + $(el).find('div.title a').attr('href');
-                    // newListing.distance = $(el).find('div.distance').text().trim();
-                    newListing.distance = "TBD";
-                    newListing.location = $(el).find('div.location span').first().text().trim();
-                    newListing.datePosted = $(el).find('div.location span.date-posted').text().trim();
-                    newListing.description = $(el).find('div.description').text().trim();
-    
-                    listingsToReturn.push(newListing);
-                });
+                listingsToReturn.push(...await pullListingsFromPage($));
+
 
             }
     
@@ -128,4 +102,25 @@ export default class Kijiji {
 
 
 
+async function pullListingsFromPage($) {
+    return new Promise(resolve => {
+        const listingsToReturn = [];
+        $('[data-listing-id]').map((i, el) => {
+            const newListing = {};
+            newListing.title = $(el).find('div.title').text().trim();
+            newListing.price = $(el).find('div.price').text().trim();
+            newListing.url = "https://kijiji.ca" + $(el).find('div.title a').attr('href');
+            // newListing.distance = $(el).find('div.distance').text().trim();
+            newListing.distance = "TBD";
+            newListing.location = $(el).find('div.location span').first().text().trim();
+            newListing.datePosted = $(el).find('div.location span.date-posted').text().trim();
+            newListing.description = $(el).find('div.description').text().trim();
+    
+            listingsToReturn.push(newListing);
+        });
+    
+        resolve(listingsToReturn);
+    })
+
+}
 

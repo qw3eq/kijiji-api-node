@@ -35,11 +35,12 @@ export default class Kijiji {
         @param {number} options.maxPrice - The maximum price
         @param {string} options.sortByName - possible values: dateDesc, priceAsc, priceDesc
         @param {number} options.categoryId - The category id
+        @param {number} options.maxResults - The maximum number of results to return (-1 for all results)
 
         @returns {object} - The search results
     */
 
-    search = async (searchQuery, {categoryName = "", brand = "", address = "Mississauga", radius="", minPrice = "", maxPrice = "", sortByName = "dateDesc", categoryId = 0} = {}) => {
+    search = async (searchQuery, {categoryName = "", brand = "", address = "Mississauga", radius="", minPrice = "", maxPrice = "", sortByName = "dateDesc", categoryId = 0, maxResults = -1} = {}) => {
         const payload = this.defaultPayload;
         payload.categoryName = categoryName;
         payload.brand = brand;
@@ -49,6 +50,7 @@ export default class Kijiji {
         payload.maxPrice = maxPrice;
         payload.sortByName = sortByName;
         payload.categoryId = categoryId;
+        payload.maxResults = maxResults;
         
         payload.keywords = searchQuery;
     
@@ -58,7 +60,7 @@ export default class Kijiji {
             const redirectUrl = response.request.path;
 
             const $ = cheerio.load(response.data);
-            const listingsToReturn = [];
+            let listingsToReturn = [];
 
             // Get the total number of results for a query
             const totalResultsRaw = $('span:Contains("Showing"):Contains("results")').text().trim();
@@ -68,6 +70,11 @@ export default class Kijiji {
             const totalPages = Math.ceil(Number(totalResults) / 40);
 
             listingsToReturn.push(...await pullListingsFromPage($));
+
+            if(listingsToReturn.length >= maxResults && maxResults != -1) {
+                listingsToReturn = listingsToReturn.slice(0, maxResults);
+                return {listings: totalResults, pages: totalPages, result: listingsToReturn}
+            }
 
             // Getting results from next pages if there are any
             if (totalPages <= 1) {
@@ -88,6 +95,10 @@ export default class Kijiji {
                 const $ = cheerio.load(res.data);
                 listingsToReturn.push(...await pullListingsFromPage($));
 
+                if(listingsToReturn.length >= maxResults && maxResults != -1) {
+                    listingsToReturn = listingsToReturn.slice(0, maxResults);
+                    return {listings: totalResults, pages: totalPages, result: listingsToReturn}
+                }
 
             }
     

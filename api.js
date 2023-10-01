@@ -40,7 +40,7 @@ export default class Kijiji {
         @returns {object} - The search results
     */
 
-    search = async (searchQuery, {categoryName = "", brand = "", address = "Mississauga", radius="", minPrice = "", maxPrice = "", sortByName = "dateDesc", categoryId = 0, maxResults = -1} = {}) => {
+    search = async (searchQuery, {categoryName = "", brand = "", address = "Mississauga", radius="", minPrice = "", maxPrice = "", sortByName = "dateDesc", categoryId = 0, maxResults = null} = {}) => {
         const payload = this.defaultPayload;
         payload.categoryName = categoryName;
         payload.brand = brand;
@@ -69,9 +69,14 @@ export default class Kijiji {
             // Total number of pages based on the number of results
             const totalPages = Math.ceil(Number(totalResults) / 40);
 
-            listingsToReturn.push(...await pullListingsFromPage($));
+            listingsToReturn = await pullListingsFromPage($);
+            console.log("About to return " + listingsToReturn.length + " listings")
 
-            if(listingsToReturn.length >= maxResults && maxResults != -1) {
+            // DEBUGGING
+            return {listings: totalResults, pages: totalPages, result: listingsToReturn}
+            // DEBUGGING
+
+            if(maxResults && listingsToReturn.length >= maxResults) {
                 listingsToReturn = listingsToReturn.slice(0, maxResults);
                 return {listings: totalResults, pages: totalPages, result: listingsToReturn}
             }
@@ -105,33 +110,40 @@ export default class Kijiji {
             return {listings: totalResults, pages: totalPages, result: listingsToReturn};
         } catch(err) {
             console.log(err.message)
+            console.log(err)
         }
     }
     
-
+    newPost = async (title, description, price, location, categoryId, images = []) => { 
+        
+    };
 }
 
 
 
 async function pullListingsFromPage($) {
-    return new Promise(resolve => {
-        const listingsToReturn = [];
-        $('[data-listing-id]').map((i, el) => {
-            const newListing = {};
-            newListing.title = $(el).find('div.title').text().trim();
-            newListing.price = $(el).find('div.price').text().trim();
-            newListing.url = "https://kijiji.ca" + $(el).find('div.title a').attr('href');
-            // newListing.distance = $(el).find('div.distance').text().trim();
-            newListing.distance = "TBD";
-            newListing.location = $(el).find('div.location span').first().text().trim();
-            newListing.datePosted = $(el).find('div.location span.date-posted').text().trim();
-            newListing.description = $(el).find('div.description').text().trim();
-    
-            listingsToReturn.push(newListing);
+        let listingsToReturn = [];
+        $('li[data-testid]').map((i, el) => {
+            if($(el).attr('data-testid') != "shopping-ads-carousel") {
+                
+                const newListing = {};
+                newListing.title = $(el).find('h3[data-testid="listing-title"]').text().trim();
+                newListing.price = $(el).find('p[data-testid="listing-price"]').text().trim();
+                newListing.url = "https://kijiji.ca" + $(el).find('a[data-testid="listing-link"]').attr('href');
+                newListing.distance = $(el).find('p[data-testid="listing-proximity"]').text().trim();
+                newListing.location = $(el).find('p[data-testid="listing-location"]').first().text().trim();
+                // newListing.datePosted = $(el).find('p[data-testid="listing-date"]').text().trim();
+                newListing.description = $(el).find('p[data-testid="listing-description"]').text().trim();
+        
+                listingsToReturn.push(newListing);
+            }
         });
+
+        listingsToReturn = listingsToReturn.filter(listing => listing.title != "")
+
+        console.log(listingsToReturn.length + " listings before filter")
     
-        resolve(listingsToReturn);
-    })
+        return listingsToReturn;
+    
 
 }
-

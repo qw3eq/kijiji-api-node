@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import toQueryString from './utils.js';
 
+import fs from 'fs';
 
 export default class Kijiji {
     constructor() {    
@@ -70,20 +71,15 @@ export default class Kijiji {
             const totalPages = Math.ceil(Number(totalResults) / 40);
 
             listingsToReturn = await pullListingsFromPage($);
-            console.log("About to return " + listingsToReturn.length + " listings")
-
-            // DEBUGGING
-            return {listings: totalResults, pages: totalPages, result: listingsToReturn}
-            // DEBUGGING
 
             if(maxResults && listingsToReturn.length >= maxResults) {
                 listingsToReturn = listingsToReturn.slice(0, maxResults);
-                return {listings: totalResults, pages: totalPages, result: listingsToReturn}
+                return {totalResults: totalResults, pages: totalPages, result: listingsToReturn}
             }
 
             // Getting results from next pages if there are any
             if (totalPages <= 1) {
-                return {listings: totalResults, pages: totalPages, result: listingsToReturn};
+                return {totalResults: totalResults, pages: totalPages, result: listingsToReturn};
             }
 
             for (let i = 2; i <= totalPages; i++) {
@@ -94,15 +90,14 @@ export default class Kijiji {
                     ...redirectUrl.split('/').slice(3)
                 ].join('/');
                 
-                const res = await axios.get(`https://www.kijiji.ca${newPagePath}}`)
-
+                const res = await axios.get(`https://www.kijiji.ca${newPagePath}`)
 
                 const $ = cheerio.load(res.data);
-                listingsToReturn.push(...await pullListingsFromPage($));
+                listingsToReturn = listingsToReturn.concat(await pullListingsFromPage($, i));
 
-                if(listingsToReturn.length >= maxResults && maxResults != -1) {
+                if(maxResults && listingsToReturn.length >= maxResults) {
                     listingsToReturn = listingsToReturn.slice(0, maxResults);
-                    return {listings: totalResults, pages: totalPages, result: listingsToReturn}
+                    return {totalResults: totalResults, pages: totalPages, result: listingsToReturn}
                 }
 
             }
@@ -121,7 +116,7 @@ export default class Kijiji {
 
 
 
-async function pullListingsFromPage($) {
+async function pullListingsFromPage($, pageNumber = 1) {
         let listingsToReturn = [];
         $('li[data-testid]').map((i, el) => {
             if($(el).attr('data-testid') != "shopping-ads-carousel") {
@@ -134,16 +129,14 @@ async function pullListingsFromPage($) {
                 newListing.location = $(el).find('p[data-testid="listing-location"]').first().text().trim();
                 // newListing.datePosted = $(el).find('p[data-testid="listing-date"]').text().trim();
                 newListing.description = $(el).find('p[data-testid="listing-description"]').text().trim();
+
+                newListing.pageNumber = pageNumber;
         
                 listingsToReturn.push(newListing);
             }
         });
 
-        listingsToReturn = listingsToReturn.filter(listing => listing.title != "")
-
-        console.log(listingsToReturn.length + " listings before filter")
-    
-        return listingsToReturn;
+        return listingsToReturn.filter(listing => listing.title != "");
     
 
 }
